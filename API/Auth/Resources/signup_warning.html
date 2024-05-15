@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      .email-body {
+        font-family: Arial, sans-serif;
+        color: #333333;
+        padding: 20px;
+        text-align: center;
+      }
+      .button {
+        display: inline-block;
+        background-color: #1d8aed;
+        color: white;
+        padding: 10px 20px;
+        margin: 20px 0;
+        text-decoration: none;
+        border-radius: 5px;
+      }
+      .footer {
+        margin-top: 20px;
+        font-size: 0.8em;
+        color: #666666;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-body">
+      <h2>Someone tried to to use your email to sign up.</h2>
+      <p>
+        Thank you for signing up. Please click the button below to verify your
+        email address and complete your registration.
+      </p>
+      <a href="{{verification_link}}" class="button">Verify Email</a>
+      <div class="footer">
+        If you did not create an account, no further action is required.
+      </div>
+    </div>
+  </body>
+</html>

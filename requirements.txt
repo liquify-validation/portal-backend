@@ -1,0 +1,15 @@
+flask 
+flask-smorest
+python-dotenv
+sqlalchemy 
+flask-sqlalchemy
+flask-jwt-extended
+passlib
+pyotp
+flask_cors
+requests
+Authlib 
+pymysql
+prometheus-api-client
+flasgger
+bcrypt

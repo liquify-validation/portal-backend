@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      .email-body {
+        font-family: Arial, sans-serif;
+        color: #333333;
+        padding: 20px;
+        text-align: center;
+      }
+      .button {
+        display: inline-block;
+        background-color: #1d8aed;
+        color: white;
+        padding: 10px 20px;
+        margin: 20px 0;
+        text-decoration: none;
+        border-radius: 5px;
+      }
+      .footer {
+        margin-top: 20px;
+        font-size: 0.8em;
+        color: #666666;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-body">
+      <h2>Hello!</h2>
+      <p>
+        You have been invited to join the {{org}} team on the liquify portal by
+        {{inviter}} use the following link to create a password.
+      </p>
+      <a href="{{verification_link}}" class="button">Setup Account</a>
+      <div class="footer">
+        If you did not recognise the organisation or inviter, you can ignore
+        this email.
+      </div>
+    </div>
+  </body>
+</html>
