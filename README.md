@@ -49,7 +49,6 @@ The application is connected to a MySQL database with the following tables:
 2. Set up a MySQL database and configure database connection details in the application.
 3. Install and configure Prometheus server for serving analytics data.
 4. Deploy the Flask API application.
-5. Ensure proper authentication and authorization mechanisms are in place for user/team management and API key generation.
 
 ## API Documentation
 
