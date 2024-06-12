@@ -80,3 +80,28 @@ def invite_user(email, org, inviter, verification_link):
     )
 
     return response
+
+def send_deleted_user_email(email, org_name, signup_link):
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    template_path = os.path.join(current_dir, 'Resources/deleted_user.html')
+
+    with open(template_path, 'r', encoding='utf-8') as file:
+        html_content = file.read()
+
+    html_content = html_content.replace('{{ org_name }}', org_name)
+    html_content = html_content.replace('{{ signup_link }}', signup_link)
+
+    email_data = {
+        "from": EMAIL_FROM,
+        "to": email,
+        "subject": "Account Deletion Notification",
+        "html": html_content,
+    }
+
+    response = requests.post(
+        "https://api.mailgun.net/v3/mailerus.liquify.io/messages",
+        auth=("api", mailgunAPIKey),
+        data=email_data
+    )
+
+    return response

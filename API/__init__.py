@@ -8,10 +8,12 @@ from flasgger import Swagger
 from flaskTemplate import template as flaskTemplate
 from flaskTemplate import swagger_config as swaggerConfig
 from authlib.integrations.flask_client import OAuth
-from resources.googleAuth import setup_oauth, google_auth_blp
+from resources.googleAuth import setup_oauth as setup_google_oauth, google_auth_blp
+from resources.githubAuth import setup_oauth as setup_github_oauth, github_auth_blp
 
 
 from blocklist import BLOCKLIST
+from urllib.parse import quote_plus
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -26,10 +28,11 @@ from config import config
 
 def create_flask_app(db,db_url=None):
     app = Flask(__name__)
-    setup_oauth(app)
     swagger = Swagger(app, template=flaskTemplate, config=swaggerConfig)
     CORS(app)
 
+    setup_google_oauth(app)
+    setup_github_oauth(app)
     app.config.from_object(config.Config)
     db.init_app(app)
 
@@ -78,6 +81,7 @@ def create_flask_app(db,db_url=None):
         db.create_all()
 
     app.register_blueprint(google_auth_blp, url_prefix='/auth')
+    app.register_blueprint(github_auth_blp, url_prefix='/auth')
     api.register_blueprint(UsersBlueprint, url_prefix='/auth')
     api.register_blueprint(ChainsBlueprint, url_prefix='/chains')
     api.register_blueprint(APIKeysBlueprint, url_prefix='/access')

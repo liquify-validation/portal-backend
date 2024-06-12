@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      .email-body {
+        font-family: Arial, sans-serif;
+        color: #333333;
+        padding: 20px;
+        text-align: center;
+      }
+      .button {
+        display: inline-block;
+        background-color: #1d8aed;
+        color: white;
+        padding: 10px 20px;
+        margin: 20px 0;
+        text-decoration: none;
+        border-radius: 5px;
+      }
+      .footer {
+        margin-top: 20px;
+        font-size: 0.8em;
+        color: #666666;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-body">
+      <h2>Hello</h2>
+      <p>Your account with the organization {{ org_name }} has been deleted.</p>
+      <p>
+        If this was a mistake or if you need to create a new account, please
+        visit the following link:
+      </p>
+      <a href="{{ signup_link }}" class="button">Sign Up</a>
+    </div>
+  </body>
+</html>

@@ -247,5 +247,5 @@ class APIKeys(MethodView):
            """
         current_user = get_jwt_identity()
         user = UserModel.query.get(current_user)
-        api_keys = APIKeyModel.query.filter_by(org_id=user.org_id).with_entities(APIKeyModel.api_name, APIKeyModel.api_key, APIKeyModel.chain_name, APIKeyModel.date_created, APIKeyModel.limit)
+        api_keys = APIKeyModel.query.filter_by(org_id=user.org_id).with_entities(APIKeyModel.api_name, APIKeyModel.api_key, APIKeyModel.chain_name, APIKeyModel.date_created, APIKeyModel.limit, APIKeyModel.user_id)
         return api_keys

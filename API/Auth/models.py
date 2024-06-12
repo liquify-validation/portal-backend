@@ -19,6 +19,7 @@ class UserModel(db.Model):
     org_name = db.Column(db.String(80), nullable=False)
     date_created = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     preference = db.Column(db.String(4096), nullable=True)
+    unix_time_of_email = db.Column(db.String(80), nullable=True, default="0")
 
 class BetaModel(db.Model):
     __tablename__ = "beta"

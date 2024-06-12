@@ -6,6 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from API.Auth.service import invite_user
 import json
 import bcrypt
+import time
 import string
 import random
 from config import config
@@ -44,6 +45,7 @@ def endpoints_get_organisation():
 
     for member in members:
         dict_user = {
+            "id": member.id,
             "email": member.email,
             "name": f"{member.first_name} {member.last_name}",
             "role": "admin" if member.id in admins else "member",
@@ -140,27 +142,24 @@ def add_to_organisation():
     db.session.add(userToAdd)
     db.session.commit()
 
-    reset_link = f"{config.Config.FRONTEND_URL}/invite/{userToAdd.reset_password_token}"
+    reset_link = f"{config.Config.FRONTEND_URL}/reset-password/{user.reset_password_token}"
 
-    # Send email with reset link (implement send_password_reset_email similar to send_verification_email)
     invite_user(user_data["email"], user.org_name, user.first_name + " " + user.last_name, reset_link)
 
     return jsonify({"message": "An invite email has been sent"}), 200
 
-# NEED TO ADD LIMITS
-@blp.route('/resend_invite', methods=['POST'])
+@blp.route('/resend-invite', methods=['POST'])
 @jwt_required()
-def resend_invite_email():
+def resend_invite():
     """
-    Resend the invitation email to a user.
-    
+    Resend invite email.
     ---
     tags:
       - Organisation
     parameters:
       - in: body
         name: user
-        description: Email of the user to resend the invite.
+        description: User email details.
         required: true
         schema:
           type: object
@@ -173,34 +172,31 @@ def resend_invite_email():
               example: user@example.com
     responses:
       200:
-        description: Invitation email resent successfully.
-      404:
-        description: User not found.
+        description: Invite email resent successfully.
       400:
-        description: User is already verified.
+        description: Invalid data or user not found.
     """
     current_user = get_jwt_identity()
     user = UserModel.query.get(current_user)
-
-    data = request.get_json()
-    email = data.get('email')
-
-    if not email:
-        abort(400, message="Email is required")
-
+    user_data = request.get_json()
+    
+    email = user_data.get('email')
     user_to_invite = UserModel.query.filter_by(email=email).first()
     if not user_to_invite:
-        abort(404, message="User not found")
+        return jsonify({"message": "If an account with that email exists, an invite email has been resent."}), 200
 
-    if user_to_invite.is_email_verified:
-        abort(400, message="User is already verified")
+    if (int(user_to_invite.unix_time_of_email) + 60) > int(time.time()):
+        return jsonify({"message": "Please wait to resend email"}), 429
 
-    invite_link = f"{config.Config.FRONTEND_URL}/invite/{user_to_invite.reset_password_token}"
+    reset_password_token = str(uuid.uuid4())
+    user_to_invite.reset_password_token = reset_password_token
+    user_to_invite.unix_time_of_email = str(int(time.time()))
+    db.session.commit()
 
-    # This function should handle the actual sending of the email
-    invite_user(email, user.org_name, user_to_invite.first_name + " " + user_to_invite.last_name, invite_link)
+    reset_link = f"{config.Config.FRONTEND_URL}/invite/{user_to_invite.reset_password_token}"
+    invite_user(user_data["email"], user.org_name, user.first_name + " " + user.last_name, reset_link)
 
-    return jsonify({"message": "Invite email resent successfully"}), 200
+    return jsonify({"message": "If an account with that email exists, an invite email has been resent."}), 200
 
 @blp.route('/make_admin', methods=['POST'])
 @jwt_required()
@@ -696,3 +692,86 @@ def get_my_details():
         "last_name": user.last_name
     }
     return jsonify(user_details), 200
+
+@blp.route('/get_org_name', methods=['POST'])
+@jwt_required()
+def get_organisation_name():
+    """
+       Returns the organisation name
+       ---
+       tags:
+            - Organisation
+       parameters:
+         - in: header
+           name: Authorization
+           description: Type in the 'Value' input box below 'Bearer &lt;JWT&gt;', where JWT is the token
+       responses:
+         200:
+           description: returned organisation name
+       """
+    current_user = get_jwt_identity()
+    user = UserModel.query.get(current_user)
+
+    org = OrgModel.query.filter(OrgModel.org_id == user.org_id).first()
+
+    if not org:
+        abort(404, message="Organisation not found")
+
+    return jsonify(org.org_name)
+
+@blp.route('/update_org_name', methods=['POST'])
+@jwt_required()
+def update_org_name():
+    """
+    Update the organisation name.
+    ---
+    tags:
+      - Organisation
+    parameters:
+      - in: header
+        name: Authorization
+        description: Type in the 'Value' input box below 'Bearer &lt;JWT&gt;', where JWT is the token
+      - in: body
+        name: org
+        description: Organisation name update details.
+        required: true
+        schema:
+          type: object
+          required:
+            - new_org_name
+          properties:
+            new_org_name:
+              type: string
+              example: New Organisation Name
+    responses:
+      200:
+        description: Organisation name updated successfully.
+      400:
+        description: Invalid data or unauthorized action.
+    """
+    current_user = get_jwt_identity()
+    user = UserModel.query.get(current_user)
+
+    if not user:
+        abort(401, message="User not found")
+
+    org = OrgModel.query.filter(OrgModel.org_id == user.org_id).first()
+
+    if not org:
+        abort(404, message="Organisation not found")
+
+    admins = json.loads(org.admins)
+    if user.id not in admins:
+        abort(403, message="User is not an admin")
+
+    new_org_name = request.json.get("new_org_name")
+    if not new_org_name:
+        abort(400, message="New organisation name is required")
+
+    try:
+        org.org_name = new_org_name
+        db.session.commit()
+        return jsonify({"message": "Organisation name updated successfully"}), 200
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        abort(500, message="An error occurred while updating the organisation name")

@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from config import config
 from flask_jwt_extended import create_access_token, create_refresh_token, get_jwt_identity, jwt_required, get_jwt
 import json
+import time
 import bcrypt
 
 from DB import db
@@ -15,7 +16,7 @@ from DB.schemas import UserSchema, UserLoginSchema, PasswordChangeSchema
 from API.Auth.models import UserModel, BetaModel
 from API.Org.models import OrgModel
 
-from API.Auth.service import send_password_reset_email, send_verification_email
+from API.Auth.service import send_password_reset_email, send_verification_email, send_deleted_user_email
 
 blp = Blueprint("users", __name__, description="Operations on users")
 BETA = True
@@ -23,7 +24,7 @@ BETA = True
 
 @blp.route("/user/<int:user_id>")
 class Users(MethodView):
-    @blp.response(200, UserSchema)  # working
+    @blp.response(200, UserSchema)
     @jwt_required()
     def get(self, user_id):
         user = UserModel.query.get_or_404(user_id)
@@ -31,19 +32,57 @@ class Users(MethodView):
 
     @jwt_required()
     def delete(self, user_id):
-        claims = get_jwt()
-        user_role = claims.get("role")
+        """
+        Delete a user by ID.
 
+        ---
+        tags:
+          - User Management
+        parameters:
+          - in: path
+            name: user_id
+            description: ID of the user to delete.
+            required: true
+            schema:
+              type: integer
+        responses:
+          200:
+            description: User successfully deleted.
+          403:
+            description: Insufficient permissions.
+          404:
+            description: User not found.
+        """
+        current_user_id = get_jwt_identity()
+        current_user = UserModel.query.get_or_404(current_user_id)
         user_to_delete = UserModel.query.get_or_404(user_id)
+        org_id = user_to_delete.org_id
 
-        if user_role == "user":
-            abort(403, message="Insufficient permissions")
-        elif user_role == "admin" and user_to_delete.role != "user":
-            abort(403, message="Insufficient permissions")
-        elif user_role in ["superadmin", "admin"]:
-            db.session.delete(user_to_delete)
-            db.session.commit()
-            return {"message": "User successfully deleted"}
+        org = OrgModel.query.filter(OrgModel.org_id == current_user.org_id).first()
+        admins = json.loads(org.admins) if org and org.admins else []
+
+        if not org:
+            abort(404, message="Organization not found")
+
+        if user_to_delete.id == current_user.id or current_user.id in admins:
+            try:
+                db.session.delete(user_to_delete)
+                db.session.commit()
+
+                if org_id:
+                    users_in_org = UserModel.query.filter_by(org_id=org_id).count()
+                    if users_in_org == 0:
+                        org_to_delete = OrgModel.query.get_or_404(org_id)
+                        db.session.delete(org_to_delete)
+                        db.session.commit()
+
+                signup_link = f'{config.Config.FRONTEND_URL}/signup'
+                send_deleted_user_email(user_to_delete.email, user_to_delete.org_name, signup_link)
+
+                return {"message": "User successfully deleted"}, 200
+            except SQLAlchemyError as e:
+                db.session.rollback()
+                abort(500, message=str(e))
         else:
             abort(403, message="Insufficient permissions")
 
@@ -143,11 +182,65 @@ class UserRegister(MethodView):
 @blp.route("/verify-email/<token>")
 class VerifyEmail(MethodView):
     def get(self, token):
-        user = UserModel.query.filter_by(email_verification_token=token).first_or_404()
-        user.is_email_verified = True
-        user.email_verification_token = None
+        user = UserModel.query.filter_by(email_verification_token=token).first()
+        if user:
+
+            user.is_email_verified = True
+            user.email_verification_token = None
+            db.session.commit()
+            return redirect(f'{config.Config.FRONTEND_URL}/email-verified?status=success')
+        else:
+
+            return redirect(f'{config.Config.FRONTEND_URL}/email-verified?status=error')
+    
+@blp.route("/resend-verification")
+class ResendVerification(MethodView):
+    def post(self):
+        """
+            Resend verification email.
+            ---
+            tags:
+              - Authentication
+            summary: Resend verification email
+            parameters:
+              - in: body
+                name: body
+                description: Email to resend verification to
+                required: true
+                schema:
+                  type: object
+                  required:
+                    - email
+                  properties:
+                    email:
+                      type: string
+                      format: email  # Optional: Use 'format' to specify email validation
+            responses:
+              200:
+                description: Verification email request sent successfully.
+              400:
+                description: Bad request - Missing or invalid email format
+            """
+        json_data = request.get_json()
+        email = json_data.get('email')
+
+        user = UserModel.query.filter_by(email=email).first()
+        if not user:
+            # To avoid numerating user list just return a 200 here
+            return jsonify({"message": "If an account with that email exists, a verification email has been sent."}), 200
+
+        if (int(user.unix_time_of_email) + 60) > int(time.time()):
+            return jsonify({"message": "Please wait to resend email"}), 429
+
+        # Generate a new verification token and save it with the user's record
+        user.email_verification_token = str(uuid.uuid4())
+        user.unix_time_of_email = str(int(time.time()))
         db.session.commit()
-        return redirect(f'{config.Config.FRONTEND_URL}/email-verified?status=success')
+
+        verification_link = url_for('users.VerifyEmail', token=user.email_verification_token, _external=True, _scheme='https')
+        send_verification_email(user.email, verification_link)
+
+        return jsonify({"message": "If an account with that email exists, a verification email has been sent."}), 200
 
 
 @blp.route("/login")
@@ -191,7 +284,7 @@ class UserLogin(MethodView):
             else:
                 access_token = create_access_token(identity=user.id, fresh=True)
                 refresh_token = create_refresh_token(identity=user.id)
-                return {"access_token": access_token, "refresh_token": refresh_token}
+                return {"access_token": access_token, "refresh_token": refresh_token, "user_id": user.id}
         else:
             abort(401, message="Login details are incorrect")
 
@@ -231,13 +324,16 @@ class ForgotPassword(MethodView):
         if not user:
             #To avoid numerating user list just return a 200 here
             return jsonify({"message": "If an account with that email exists, a password reset link has been sent."}), 200
+        
+        if (int(user.unix_time_of_email) + 60) > int(time.time()):
+            return jsonify({"message": "Please wait to resend email"}), 429
 
         # Generate a password reset token and save it with the user's record
         user.reset_password_token = str(uuid.uuid4())
+        user.unix_time_of_email = str(int(time.time()))
         db.session.commit()
 
-        # reset_link = url_for('users.ResetPassword', token=user.reset_password_token, _external=True)
-        reset_link = f"{config.Config.FRONTEND_URL}/reset-password/{user.reset_password_token}"
+        reset_link = url_for('users.ResetPassword', token=user.reset_password_token, _external=True, _scheme='https')
 
         # Send email with reset link (implement send_password_reset_email similar to send_verification_email)
         send_password_reset_email(user.email, reset_link)
@@ -279,7 +375,7 @@ class ResetPassword(MethodView):
 
         user = UserModel.query.filter_by(reset_password_token=token).first()
         if not user:
-            abort(404, description="Invalid or expired password reset token.")
+            abort(404, description="Error resetting password. Contact Support")
 
         user.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
         user.reset_password_token = None

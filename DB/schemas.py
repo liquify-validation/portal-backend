@@ -34,6 +34,7 @@ class APIKeySchema(Schema):
     api_key = fields.Str(dump_only=True)
     date_created = fields.DateTime(dump_only=True)
     limit = fields.Int(required=False)
+    user_id = fields.Int(dump_only=True) 
 
 class PasswordChangeSchema(Schema):
     old_password = fields.String(required=True)

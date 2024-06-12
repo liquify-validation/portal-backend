@@ -31,7 +31,7 @@ google_auth_blp = Blueprint('google_auth', __name__)
 
 @google_auth_blp.route('/google-login')
 def google_login():
-    redirect_uri = url_for('.google_callback', _external=True)
+    redirect_uri = url_for('.google_callback', _external=True, _scheme='https')
     return oauth.google.authorize_redirect(redirect_uri)
 
 @google_auth_blp.route('/signin-google')
@@ -39,7 +39,6 @@ def google_callback():
     try:
         token = oauth.google.authorize_access_token()
     except Exception as e:
-        print(e)  # Properly log the error
         return redirect(f'{config.Config.FRONTEND_URL}/error')
 
     data = oauth.google.get('https://www.googleapis.com/oauth2/v2/userinfo').json()
@@ -83,16 +82,13 @@ def google_callback():
     access_token = create_access_token(identity=user.id, fresh=True)
     refresh_token = create_refresh_token(identity=user.id)
 
-    # Instead of redirecting with cookies, return the tokens directly
     tokens = {
         "access_token": access_token,
         "refresh_token": refresh_token
     }
-    # Assuming you have a frontend route ready to handle these tokens
-    redirect_url = f'{config.Config.FRONTEND_URL}/home_with_tokens'
-    test=f"{redirect_url}?access_token={tokens['access_token']}&refresh_token={tokens['refresh_token']}"
+    redirect_url = f'{config.Config.FRONTEND_URL}/auth/callback'
 
-    return redirect(f"{redirect_url}?access_token={tokens['access_token']}&refresh_token={tokens['refresh_token']}")
+    return redirect(f"{redirect_url}?access_token={tokens['access_token']}&refresh_token={tokens['refresh_token']}&user_id={user.id}")
 
 
 @google_auth_blp.route('/status', methods=['GET'])
@@ -108,6 +104,4 @@ def auth_status():
         # If a user is found with the ID in the token, they are considered authenticated.
         return jsonify({'isAuthenticated': True, 'userId': current_user_id, 'email': user.email}), 200
     else:
-        # This should theoretically never happen if your token management is secure,
-        # but it's good to handle the case.
         return jsonify({'isAuthenticated': False}), 404
