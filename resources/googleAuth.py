@@ -58,11 +58,11 @@ def google_callback():
             is_email_verified=data['verified_email'] if 'verified_email' in data else False,
             mfa_enabled=False,
             password=bcrypt.hashpw(random_string.encode('utf-8'), bcrypt.gensalt()),
+            org_name=data['email']
         )
         db.session.add(user)
         db.session.commit()
 
-        # make them an org - name it with email (they can change it later)
         admins = [user.id]
         org = OrgModel(
             org_owner=user.id,
