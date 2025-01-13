@@ -428,7 +428,7 @@ class InviteResetPassword(MethodView):
         return jsonify({"message": "Your password has been updated successfully."}), 200
 
 
-@blp.route("/refresh")  # Working
+@blp.route("/refresh")  
 class TokenRefresh(MethodView):
     @jwt_required(refresh=True)
     def post(self):
@@ -437,7 +437,7 @@ class TokenRefresh(MethodView):
         return {"access_token": new_token}
 
 
-@blp.route("/logout")  # Working
+@blp.route("/logout")  
 class UserLogout(MethodView):
     @jwt_required()
     def post(self):
